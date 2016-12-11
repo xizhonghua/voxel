@@ -8,6 +8,26 @@
 #define VOXELIZER_IMPLEMENTATION
 #include "voxelizer.h"
 
+#define SQR(x) ((x)*(x))
+
+// Get the vertex id of a given position
+int get_vertex_id(std::vector<float>& vx, std::vector<float>& vy, std::vector<float>& vz, 
+                  float x, float y, float z) {
+  const float threshold = 1e-7;
+  int n = vx.size();
+  for(int i=0;i<n;++i) {
+    float diff = SQR(vx[i]-x) + SQR(vy[i]-y) + SQR(vz[i]-z);
+    if(diff < threshold) return i;
+  }
+
+  // add the new point to the array
+  vx.push_back(x);
+  vy.push_back(y);
+  vz.push_back(z);
+
+  return n;
+}
+
 void voxelization(const std::string& input_path, const double res, const double precision) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
@@ -43,29 +63,53 @@ void voxelization(const std::string& input_path, const double res, const double 
     
     printf("Number of vertices: %ld\n", result->nvertices);
     printf("Number of indices: %ld\n", result->nindices);
+
+    std::vector<float> vx;
+    std::vector<float> vy;
+    std::vector<float> vz;
+
+    // org vid -> new vid
+    std::vector<int> vv(result->nvertices, -1);
     
     if (file.is_open()) {
       file << " " << "\n";
       for (int i = 0; i < result->nvertices; ++i) {
+        int n = vx.size();
+        int vid = get_vertex_id(vx, vy, vz, result->vertices[i].x, result->vertices[i].y, result->vertices[i].z);
+        vv[i] = vid;
+        // merge duplicate vertices
+        if (vid != n) continue;
         file << "v " << result->vertices[i].x << " "
         <<  result->vertices[i].y << " "
         <<  result->vertices[i].z << "\n";
       }
-      for (int i = 0; i < result->nnormals; ++i) {
-        file << "vn " << result->normals[i].x << " "
-        << result->normals[i].y << " "
-        << result->normals[i].z << "\n";
-      }
+
+      printf("Number of unique vertices: %ld\n", vx.size());
       
+      /* vertex normal */
+      // for (int i = 0; i < result->nnormals; ++i) {
+      //   file << "vn " << result->normals[i].x << " "
+      //   << result->normals[i].y << " "
+      //   << result->normals[i].z << "\n";
+      // }
+      
+      // for (int i = 0; i < result->nindices; i += 3) {
+      //   file << "f " << result->indices[i] + 1 << "//"
+      //   << result->normalindices[i] + 1;
+      //   file << " ";
+      //   file << result->indices[i+1] + 1 << "//"
+      //   << result->normalindices[i+1] + 1;
+      //   file << " ";
+      //   file << result->indices[i+2] + 1 << "//"
+      //   << result->normalindices[i+2] + 1 << "\n";
+      // }
+
       for (int i = 0; i < result->nindices; i += 3) {
-        file << "f " << result->indices[i] + 1 << "//"
-        << result->normalindices[i] + 1;
+        file << "f " << vv[result->indices[i]] + 1;
         file << " ";
-        file << result->indices[i+1] + 1 << "//"
-        << result->normalindices[i+1] + 1;
+        file << vv[result->indices[i+1]] + 1;
         file << " ";
-        file << result->indices[i+2] + 1 << "//"
-        << result->normalindices[i+2] + 1 << "\n";
+        file << vv[result->indices[i+2]] + 1 << "\n";
       }
     }
     
